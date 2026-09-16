@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Utensils, Lock, Mail, ArrowRight, ShieldCheck, UserCheck } from 'lucide-react';
+import { NeoButton } from '@/components/neo/NeoButton';
+import { NeoCard } from '@/components/neo/NeoCard';
+import { NeoInput } from '@/components/neo/NeoInput';
+import { Utensils, Mail, Lock, ArrowRight, UserCheck, ShieldCheck } from 'lucide-react';
 
 export default function EntryPage() {
   const router = useRouter();
@@ -20,7 +23,6 @@ export default function EntryPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    // Check if session exists and redirect automatically
     fetch('/api/auth/me')
       .then((res) => res.json())
       .then((data) => {
@@ -112,152 +114,131 @@ export default function EntryPage() {
   if (loading) {
     return (
       <div className="min-h-[80vh] flex flex-col items-center justify-center">
-        <div className="w-8 h-8 border-4 border-sky-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="mt-3 text-sm text-slate-500 font-medium">Verifying session...</p>
+        <div className="w-10 h-10 border-4 border-neoBlack border-t-neoPrimary rounded-none animate-spin"></div>
+        <p className="mt-3 text-xs font-black uppercase text-neoBlack tracking-wider">INITIALIZING iCAMPUS SESSION...</p>
       </div>
     );
   }
 
   return (
     <div className="min-h-[85vh] flex flex-col items-center justify-center max-w-md mx-auto py-6">
-      {/* App Header */}
-      <div className="text-center mb-8">
-        <div className="inline-flex items-center justify-center w-14 h-14 bg-sky-600 text-white rounded-2xl shadow-sm mb-3">
-          <Utensils className="w-7 h-7" />
+      {/* Product Hero Banner */}
+      <div className="text-center mb-6">
+        <div className="inline-flex items-center justify-center w-16 h-16 bg-neoPrimary border-2.5 border-neoBlack shadow-[4px_4px_0px_0px_#111111] mb-3">
+          <Utensils className="w-8 h-8 text-neoBlack" />
         </div>
-        <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">CAMPUS CANTEEN</h1>
-        <p className="text-xs font-semibold uppercase tracking-wider text-sky-600 mt-0.5">
-          Smart Pre-Order & Pickup System
-        </p>
+        <h1 className="text-3xl font-black font-display text-neoBlack uppercase tracking-tight">
+          iCAMPUS CANTEEN
+        </h1>
+        <div className="inline-block bg-neoBlack text-neoPrimary px-3 py-0.5 text-xs font-black uppercase tracking-widest mt-1 border border-neoBlack">
+          ORDER BEFORE THE RUSH
+        </div>
       </div>
 
-      {/* Main Card */}
-      <div className="w-full surface-card p-6 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex border-b border-slate-200 mb-6">
+      {/* Main Neo Card */}
+      <NeoCard className="w-full">
+        <div className="flex border-b-2 border-neoBlack mb-6">
           <button
             onClick={() => {
               setIsSignup(false);
               setError('');
             }}
-            className={`flex-1 py-2.5 text-center text-sm font-semibold border-b-2 transition-colors ${
-              !isSignup ? 'border-sky-600 text-sky-600' : 'border-transparent text-slate-500 hover:text-slate-800'
+            className={`flex-1 py-2 text-center text-xs font-black uppercase tracking-wider transition-colors ${
+              !isSignup ? 'bg-neoPrimary text-neoBlack font-display border-r-2 border-neoBlack' : 'bg-white text-slate-500 hover:text-neoBlack border-r-2 border-neoBlack'
             }`}
           >
-            Log In
+            LOG IN
           </button>
           <button
             onClick={() => {
               setIsSignup(true);
               setError('');
             }}
-            className={`flex-1 py-2.5 text-center text-sm font-semibold border-b-2 transition-colors ${
-              isSignup ? 'border-sky-600 text-sky-600' : 'border-transparent text-slate-500 hover:text-slate-800'
+            className={`flex-1 py-2 text-center text-xs font-black uppercase tracking-wider transition-colors ${
+              isSignup ? 'bg-neoPrimary text-neoBlack font-display' : 'bg-white text-slate-500 hover:text-neoBlack'
             }`}
           >
-            Create Account
+            CREATE ACCOUNT
           </button>
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs font-medium text-red-700">
+          <div className="mb-4 p-3 bg-red-100 border-2 border-neoBlack text-xs font-black text-red-900 shadow-[2px_2px_0px_0px_#111111]">
             {error}
           </div>
         )}
 
         {message && (
-          <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-medium text-emerald-800">
+          <div className="mb-4 p-3 bg-emerald-100 border-2 border-neoBlack text-xs font-black text-emerald-900 shadow-[2px_2px_0px_0px_#111111]">
             {message}
           </div>
         )}
 
         {!isSignup ? (
           <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Email Address</label>
-              <div className="relative">
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="student@campus.edu"
-                  className="w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-                />
-                <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
-              </div>
-            </div>
+            <NeoInput
+              label="Email Address"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="student@campus.edu"
+            />
 
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Password</label>
-              <div className="relative">
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-                />
-                <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
-              </div>
-            </div>
+            <NeoInput
+              label="Password"
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+            />
 
-            <button
+            <NeoButton
               type="submit"
+              variant="primary"
               disabled={submitting}
-              className="w-full py-3 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl shadow-sm text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50 mt-2"
+              className="w-full mt-2"
             >
-              {submitting ? 'Authenticating...' : 'Sign In'} <ArrowRight className="w-4 h-4" />
-            </button>
+              {submitting ? 'AUTHENTICATING...' : 'SIGN IN →'}
+            </NeoButton>
           </form>
         ) : (
           <form onSubmit={handleSignup} className="space-y-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Full Name</label>
-              <input
-                type="text"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Hariharan R"
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-              />
-            </div>
+            <NeoInput
+              label="Full Name"
+              type="text"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Hariharan R"
+            />
 
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Email Address</label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="student@campus.edu"
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-              />
-            </div>
+            <NeoInput
+              label="Email Address"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="student@campus.edu"
+            />
 
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Mobile Phone</label>
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="9876543210"
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-              />
-            </div>
+            <NeoInput
+              label="Mobile Phone"
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="9876543210"
+            />
 
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Password</label>
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-              />
-            </div>
+            <NeoInput
+              label="Password"
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+            />
 
             <div className="pt-1">
               <label className="flex items-center gap-2 cursor-pointer">
@@ -265,54 +246,52 @@ export default function EntryPage() {
                   type="checkbox"
                   checked={isOwnerRequest}
                   onChange={(e) => setIsOwnerRequest(e.target.checked)}
-                  className="rounded text-sky-600 focus:ring-sky-500"
+                  className="w-4 h-4 border-2 border-neoBlack accent-neoBlack"
                 />
-                <span className="text-xs text-slate-700 font-medium">Request Canteen Owner Account</span>
+                <span className="text-xs text-neoBlack font-bold uppercase">Request Canteen Owner Account</span>
               </label>
-              {isOwnerRequest && (
-                <p className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-lg mt-1.5 border border-amber-200">
-                  ⚠️ Owner accounts require explicit approval by Campus Admin before canteen access is granted.
-                </p>
-              )}
             </div>
 
-            <button
+            <NeoButton
               type="submit"
+              variant="primary"
               disabled={submitting}
-              className="w-full py-3 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl shadow-sm text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50 mt-2"
+              className="w-full mt-2"
             >
-              {submitting ? 'Registering...' : 'Create Account'}
-            </button>
+              {submitting ? 'REGISTERING...' : 'REGISTER ACCOUNT'}
+            </NeoButton>
           </form>
         )}
-      </div>
+      </NeoCard>
 
-      {/* Quick Demo Selector */}
-      <div className="w-full mt-6 surface-card p-4 rounded-xl border border-slate-200">
-        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2.5 text-center">
-          ⚡ One-Click Demo Access
+      {/* Quick Demo Access Bar */}
+      <div className="w-full mt-6 surface-card p-4 border-2.5 border-neoBlack shadow-[4px_4px_0px_0px_#111111] bg-white">
+        <p className="text-[11px] font-black text-neoBlack uppercase tracking-widest mb-2.5 text-center font-display">
+          ⚡ DEMO ACCOUNTS ONE-CLICK LOGIN
         </p>
         <div className="grid grid-cols-3 gap-2">
           <button
             onClick={() => fillQuickDemo('student@campus.edu', 'password123')}
-            className="px-2 py-2 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-lg text-xs font-bold text-sky-800 transition-colors flex flex-col items-center gap-1"
+            className="p-2 bg-neoPrimary hover:bg-yellow-300 border-2 border-neoBlack shadow-[2px_2px_0px_0px_#111111] text-[11px] font-black text-neoBlack flex flex-col items-center gap-1 active:translate-x-[1px] active:translate-y-[1px]"
           >
-            <UserCheck className="w-4 h-4 text-sky-600" />
-            <span>Student</span>
+            <UserCheck className="w-4 h-4" />
+            <span>STUDENT</span>
           </button>
+
           <button
             onClick={() => fillQuickDemo('ravi@maincanteen.edu', 'password123')}
-            className="px-2 py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-xs font-bold text-emerald-800 transition-colors flex flex-col items-center gap-1"
+            className="p-2 bg-neoSecondary hover:bg-orange-500 border-2 border-neoBlack shadow-[2px_2px_0px_0px_#111111] text-[11px] font-black text-white flex flex-col items-center gap-1 active:translate-x-[1px] active:translate-y-[1px]"
           >
-            <Utensils className="w-4 h-4 text-emerald-600" />
-            <span>Owner</span>
+            <Utensils className="w-4 h-4" />
+            <span>OWNER</span>
           </button>
+
           <button
             onClick={() => fillQuickDemo('admin@campus.edu', 'password123')}
-            className="px-2 py-2 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg text-xs font-bold text-purple-800 transition-colors flex flex-col items-center gap-1"
+            className="p-2 bg-neoBlack hover:bg-slate-800 border-2 border-neoBlack shadow-[2px_2px_0px_0px_#D9FF00] text-[11px] font-black text-neoPrimary flex flex-col items-center gap-1 active:translate-x-[1px] active:translate-y-[1px]"
           >
-            <ShieldCheck className="w-4 h-4 text-purple-600" />
-            <span>Admin</span>
+            <ShieldCheck className="w-4 h-4" />
+            <span>ADMIN</span>
           </button>
         </div>
       </div>

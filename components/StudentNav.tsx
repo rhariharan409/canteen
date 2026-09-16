@@ -15,7 +15,7 @@ export default function StudentNav() {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50 py-2 px-4 shadow-lg md:max-w-md md:mx-auto md:bottom-4 md:rounded-2xl md:border">
+    <nav className="fixed bottom-3 left-4 right-4 z-50 max-w-md mx-auto bg-white border-2.5 border-neoBlack shadow-[4px_4px_0px_0px_#111111] p-1.5">
       <div className="flex justify-around items-center">
         {navItems.map((item) => {
           const Icon = item.icon;
@@ -24,12 +24,14 @@ export default function StudentNav() {
             <Link
               key={item.label}
               href={item.href}
-              className={`flex flex-col items-center py-1 px-3 rounded-xl transition-all ${
-                isActive ? 'text-sky-600 font-bold bg-sky-50' : 'text-slate-500 hover:text-slate-800'
+              className={`flex flex-col items-center py-1.5 px-3 border-2 transition-all ${
+                isActive
+                  ? 'bg-neoPrimary text-neoBlack border-neoBlack shadow-[2px_2px_0px_0px_#111111] font-black'
+                  : 'bg-white border-transparent text-slate-700 hover:border-neoBlack'
               }`}
             >
-              <Icon className="w-5 h-5 mb-0.5" />
-              <span className="text-[10px] uppercase tracking-wider">{item.label}</span>
+              <Icon className="w-4 h-4 mb-0.5" />
+              <span className="text-[9px] font-extrabold uppercase tracking-wider">{item.label}</span>
             </Link>
           );
         })}

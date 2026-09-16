@@ -3,7 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import StudentNav from '@/components/StudentNav';
-import { Store, ChevronRight, AlertCircle } from 'lucide-react';
+import { NeoCard } from '@/components/neo/NeoCard';
+import { NeoButton } from '@/components/neo/NeoButton';
+import { NeoBadge } from '@/components/neo/NeoBadge';
+import { Store, ChevronRight, AlertCircle, Sparkles } from 'lucide-react';
 
 interface Canteen {
   id: string;
@@ -24,7 +27,6 @@ export default function StudentHomePage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    // Load session user and active canteens
     Promise.all([
       fetch('/api/auth/me').then((r) => r.json()),
       fetch('/api/student/canteens').then((r) => r.json()),
@@ -52,102 +54,113 @@ export default function StudentHomePage() {
   if (loading) {
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center">
-        <div className="w-8 h-8 border-4 border-sky-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="mt-3 text-sm text-slate-500 font-medium">Loading campus canteens...</p>
+        <div className="w-10 h-10 border-4 border-neoBlack border-t-neoPrimary rounded-none animate-spin"></div>
+        <p className="mt-3 text-xs font-black uppercase text-neoBlack tracking-wider">FETCHING CANTEENS...</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 pb-20">
-      {/* Header */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
-        <div>
-          <p className="text-xs font-bold text-sky-600 uppercase tracking-wider">Campus Pre-Order</p>
-          <h1 className="text-xl font-extrabold text-slate-900 mt-0.5">
-            Good morning, {userName.split(' ')[0]}
-          </h1>
+    <div className="space-y-6 pb-24">
+      {/* Top Banner Header */}
+      <div className="bg-neoBlack text-white p-6 border-2.5 border-neoBlack shadow-[6px_6px_0px_0px_#D9FF00]">
+        <div className="flex items-center justify-between">
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-widest text-neoPrimary bg-slate-900 px-2 py-0.5 border border-neoPrimary">
+              PRE-ORDER PLATFORM
+            </span>
+            <h1 className="text-3xl font-black font-display tracking-tight text-white uppercase mt-1 leading-none">
+              ORDER BEFORE THE RUSH.
+            </h1>
+            <p className="text-xs font-bold text-slate-300 mt-1 uppercase tracking-wider">
+              Pre-order. Pay. Pick up in seconds.
+            </p>
+          </div>
         </div>
-        <div className="w-10 h-10 bg-sky-100 text-sky-700 rounded-full flex items-center justify-center font-extrabold text-sm border border-sky-200">
+      </div>
+
+      {/* Greeting Banner */}
+      <div className="bg-neoPrimary border-2.5 border-neoBlack p-4 shadow-[4px_4px_0px_0px_#111111] flex items-center justify-between">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-wider text-neoBlack">STUDENT SESSION</p>
+          <h2 className="text-lg font-black font-display text-neoBlack">
+            HELLO, {userName.split(' ')[0].toUpperCase()}
+          </h2>
+        </div>
+        <div className="w-10 h-10 bg-neoBlack text-neoPrimary font-black text-base flex items-center justify-center border-2 border-neoBlack">
           {userName.charAt(0)}
         </div>
       </div>
 
-      {/* Section Title */}
-      <div>
-        <h2 className="text-base font-bold text-slate-900 mb-1">Choose a Canteen</h2>
-        <p className="text-xs text-slate-500">Select your canteen to browse live available stock.</p>
+      {/* Section Label */}
+      <div className="border-b-2.5 border-neoBlack pb-1 flex justify-between items-end">
+        <h3 className="text-sm font-black font-display uppercase tracking-wider text-neoBlack">
+          TODAY'S CANTEENS
+        </h3>
+        <span className="text-[11px] font-bold text-slate-600">{canteens.length} AVAILABLE</span>
       </div>
 
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center gap-2">
+        <div className="p-4 bg-neoDanger text-white border-2 border-neoBlack shadow-[3px_3px_0px_0px_#111111] text-xs font-black flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
       {canteens.length === 0 && !error && (
-        <div className="p-8 bg-white border border-slate-200 rounded-2xl text-center space-y-2">
-          <Store className="w-10 h-10 text-slate-300 mx-auto" />
-          <p className="text-sm font-bold text-slate-700">No canteens are currently available.</p>
-          <p className="text-xs text-slate-500">Please check back later during canteen operating hours.</p>
-        </div>
+        <NeoCard className="text-center py-12">
+          <Store className="w-12 h-12 text-slate-400 mx-auto mb-2" />
+          <h4 className="text-base font-black font-display text-neoBlack uppercase">NO CANTEENS AVAILABLE</h4>
+          <p className="text-xs font-bold text-slate-600 mt-1">Please check back during campus break hours.</p>
+        </NeoCard>
       )}
 
-      {/* Canteen Cards List */}
+      {/* Canteen Cards Grid */}
       <div className="grid gap-4 md:grid-cols-2">
         {canteens.map((canteen) => {
           const isPaused = canteen.status === 'PAUSED';
           return (
-            <div
-              key={canteen.id}
-              className={`surface-card p-5 rounded-2xl border transition-all hover:border-slate-300 ${
-                isPaused ? 'opacity-85 bg-slate-50' : ''
-              }`}
-            >
-              <div className="flex items-start justify-between mb-3">
+            <NeoCard key={canteen.id} className="space-y-4">
+              <div className="flex items-start justify-between border-b-2 border-neoBlack pb-3">
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900">{canteen.name}</h3>
-                  <p className="text-xs text-slate-500 font-medium">{canteen.location}</p>
+                  <h3 className="text-xl font-black font-display uppercase text-neoBlack">{canteen.name}</h3>
+                  <p className="text-xs font-bold text-slate-600">{canteen.location}</p>
                 </div>
-                <span className={`status-badge ${isPaused ? 'status-paused' : 'status-live'}`}>
+                <NeoBadge variant={isPaused ? 'paused' : 'live'}>
                   {isPaused ? 'PAUSED' : 'OPEN'}
-                </span>
+                </NeoBadge>
               </div>
 
-              <div className="flex items-center gap-4 text-xs font-semibold text-slate-600 mb-4 pt-2 border-t border-slate-100">
-                <div>
-                  <span className="text-slate-400 font-normal">Available:</span>{' '}
-                  <span className="text-slate-900 font-bold">{canteen.availableItemCount} items</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 font-normal">Pickup Load:</span>{' '}
-                  <span
-                    className={`font-bold ${
-                      canteen.estimatedPickupLoad === 'High'
-                        ? 'text-amber-700'
-                        : canteen.estimatedPickupLoad === 'Medium'
-                        ? 'text-sky-700'
-                        : 'text-emerald-700'
-                    }`}
-                  >
-                    {canteen.estimatedPickupLoad}
+              {/* Operational Capacity Meter */}
+              <div className="space-y-1 bg-amber-50 p-3 border-2 border-neoBlack">
+                <div className="flex justify-between text-xs font-black">
+                  <span>PICKUP CAPACITY:</span>
+                  <span className={canteen.loadPercentage > 70 ? 'text-neoDanger font-extrabold' : 'text-neoBlack'}>
+                    {canteen.loadPercentage}% BUSY
                   </span>
                 </div>
+                <div className="w-full bg-white h-3.5 border-2 border-neoBlack overflow-hidden">
+                  <div
+                    className={`h-full ${
+                      canteen.loadPercentage > 70 ? 'bg-neoDanger' : 'bg-neoPrimary'
+                    }`}
+                    style={{ width: `${canteen.loadPercentage}%` }}
+                  ></div>
+                </div>
+                <div className="text-[11px] font-bold text-slate-700 pt-0.5">
+                  {canteen.availableItemCount} items ready for pre-order
+                </div>
               </div>
 
-              <button
+              <NeoButton
                 onClick={() => router.push(`/student/canteen/${canteen.id}`)}
-                className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                  isPaused
-                    ? 'bg-amber-100 text-amber-900 border border-amber-200'
-                    : 'bg-sky-600 hover:bg-sky-700 text-white shadow-sm'
-                }`}
+                variant={isPaused ? 'outline' : 'primary'}
+                className="w-full justify-between"
               >
-                <span>{isPaused ? 'View Menu (Orders Paused)' : 'View Menu'}</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
+                <span>{isPaused ? 'VIEW MENU (PAUSED)' : 'VIEW MENU'}</span>
+                <ChevronRight className="w-5 h-5" />
+              </NeoButton>
+            </NeoCard>
           );
         })}
       </div>

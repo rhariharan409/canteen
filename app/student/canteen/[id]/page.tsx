@@ -3,7 +3,11 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import StudentNav from '@/components/StudentNav';
-import { Search, ShoppingBag, ArrowLeft, Plus, Minus, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { NeoCard } from '@/components/neo/NeoCard';
+import { NeoButton } from '@/components/neo/NeoButton';
+import { NeoBadge } from '@/components/neo/NeoBadge';
+import { NeoInput } from '@/components/neo/NeoInput';
+import { Search, ShoppingBag, ArrowLeft, Plus, Minus, AlertCircle, Clock } from 'lucide-react';
 
 interface MenuItem {
   id: string;
@@ -54,7 +58,7 @@ export default function StudentCanteenMenuPage() {
         setLoading(false);
       })
       .catch(() => {
-        setError('Failed to load menu.');
+        setError('Failed to load canteen menu.');
         setLoading(false);
       });
   }, [canteenId]);
@@ -71,7 +75,7 @@ export default function StudentCanteenMenuPage() {
       }
 
       if (nextQty > maxStock) {
-        setError(`Cannot add more than ${maxStock} items available in stock.`);
+        setError(`Cannot add more than ${maxStock} units available in stock.`);
         setTimeout(() => setError(''), 3000);
         return prev;
       }
@@ -125,13 +129,12 @@ export default function StudentCanteenMenuPage() {
       try {
         localStorage.setItem('active_pickup_order', JSON.stringify(data.order));
       } catch (e) {
-        console.warn('LocalStorage error:', e);
+        console.warn('LocalStorage caching error:', e);
       }
 
-      // Redirect student directly to active pickup slip screen
       router.push('/student/pickup');
     } catch (err: any) {
-      setError('Checkout error. Please check your connection.');
+      setError('Connection error. Please try again.');
       setCheckoutSubmitting(false);
     }
   };
@@ -139,62 +142,58 @@ export default function StudentCanteenMenuPage() {
   if (loading) {
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center">
-        <div className="w-8 h-8 border-4 border-sky-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="mt-3 text-sm text-slate-500 font-medium">Fetching menu & live stock...</p>
+        <div className="w-10 h-10 border-4 border-neoBlack border-t-neoPrimary rounded-none animate-spin"></div>
+        <p className="mt-3 text-xs font-black uppercase text-neoBlack tracking-wider">FETCHING MENU & LIVE STOCK...</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4 pb-28">
-      {/* Header */}
-      <div className="flex items-center gap-3 pt-2">
-        <button
-          onClick={() => router.push('/student/home')}
-          className="w-9 h-9 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-slate-700 hover:bg-slate-50"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <div>
-          <h1 className="text-xl font-extrabold text-slate-900">{canteen?.name}</h1>
-          <div className="flex items-center gap-2 mt-0.5">
-            <span className={`status-badge ${canteen?.isPaused ? 'status-paused' : 'status-live'}`}>
-              {canteen?.isPaused ? 'PAUSED' : 'OPEN'}
-            </span>
-            <span className="text-xs text-slate-500">{canteen?.location}</span>
+    <div className="space-y-4 pb-32">
+      {/* Canteen Header */}
+      <div className="bg-neoBlack text-white p-4 border-2.5 border-neoBlack shadow-[4px_4px_0px_0px_#D9FF00] flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => router.push('/student/home')}
+            className="p-2 bg-neoPrimary text-neoBlack border-2 border-neoBlack hover:bg-yellow-300 font-bold"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div>
+            <h1 className="text-xl font-black font-display uppercase tracking-tight">{canteen?.name}</h1>
+            <p className="text-xs font-bold text-slate-300">{canteen?.location}</p>
           </div>
         </div>
+        <NeoBadge variant={canteen?.isPaused ? 'paused' : 'live'}>
+          {canteen?.isPaused ? 'PAUSED' : 'OPEN'}
+        </NeoBadge>
       </div>
 
       {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs font-semibold text-red-700 flex items-center gap-2">
+        <div className="p-3 bg-neoDanger text-white border-2 border-neoBlack shadow-[3px_3px_0px_0px_#111111] text-xs font-black flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
-      {/* Search Bar */}
-      <div className="relative">
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search food..."
-          className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-        />
-        <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
-      </div>
+      {/* Search Input */}
+      <NeoInput
+        type="text"
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        placeholder="SEARCH FOOD..."
+      />
 
-      {/* Dynamic Category Tabs */}
+      {/* Category Tabs */}
       <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
         {categories.map((cat) => (
           <button
             key={cat}
             onClick={() => setActiveCategory(cat)}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+            className={`px-4 py-1.5 text-xs font-black uppercase tracking-wider border-2 border-neoBlack transition-all ${
               activeCategory === cat
-                ? 'bg-sky-600 text-white shadow-sm'
-                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                ? 'bg-neoPrimary text-neoBlack shadow-[2px_2px_0px_0px_#111111]'
+                : 'bg-white text-slate-700 hover:bg-slate-100 shadow-[2px_2px_0px_0px_#111111]'
             }`}
           >
             {cat}
@@ -202,104 +201,103 @@ export default function StudentCanteenMenuPage() {
         ))}
       </div>
 
-      {/* Food Cards List */}
+      {/* Food Items List */}
       <div className="grid gap-3 md:grid-cols-2">
         {filteredItems.map((item) => {
           const qtyInCart = cart[item.id] || 0;
           const isSoldOut = item.currentStock <= 0;
 
           return (
-            <div
+            <NeoCard
               key={item.id}
-              className={`surface-card p-4 rounded-xl border flex items-center justify-between gap-3 ${
-                isSoldOut ? 'bg-slate-50 opacity-75' : ''
+              className={`flex items-center justify-between gap-3 ${
+                isSoldOut ? 'bg-slate-100 opacity-80' : ''
               }`}
             >
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <h4 className="text-base font-bold text-slate-900 truncate">{item.name}</h4>
-                  <span className="text-[10px] uppercase font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                <div className="flex items-center gap-2 mb-1">
+                  <h4 className="text-lg font-black font-display uppercase text-neoBlack truncate">{item.name}</h4>
+                  <span className="text-[9px] font-black uppercase bg-slate-200 text-slate-800 px-1.5 py-0.5 border border-neoBlack">
                     {item.category}
                   </span>
                 </div>
-                {item.description && (
-                  <p className="text-xs text-slate-500 line-clamp-1 mb-1">{item.description}</p>
-                )}
+
                 <div className="flex items-center gap-3">
-                  <span className="text-base font-extrabold text-slate-900">₹{item.price}</span>
+                  <span className="text-xl font-black font-mono text-neoBlack">₹{item.price}</span>
                   {!isSoldOut ? (
-                    <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
-                      Available: {item.currentStock}
+                    <span className="text-xs font-black uppercase text-neoBlack bg-neoPrimary px-2 py-0.5 border border-neoBlack">
+                      {item.currentStock} LEFT
                     </span>
                   ) : (
-                    <span className="text-xs font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded-md uppercase">
-                      SOLD OUT
-                    </span>
+                    <NeoBadge variant="soldout">SOLD OUT</NeoBadge>
                   )}
                 </div>
               </div>
 
-              {/* Quantity Selector or Sold Out indicator */}
+              {/* Quantity Selector / Add Button */}
               <div className="shrink-0">
                 {!isSoldOut && !canteen?.isPaused ? (
                   qtyInCart === 0 ? (
-                    <button
+                    <NeoButton
                       onClick={() => updateQuantity(item.id, 1, item.currentStock)}
-                      className="px-4 py-2 bg-sky-50 hover:bg-sky-100 text-sky-700 font-bold border border-sky-200 rounded-xl text-xs transition-colors"
+                      variant="primary"
+                      size="sm"
                     >
-                      ADD
-                    </button>
+                      ADD TO CART
+                    </NeoButton>
                   ) : (
-                    <div className="flex items-center gap-2 bg-sky-600 text-white rounded-xl p-1 shadow-sm">
+                    <div className="flex items-center gap-2 bg-neoBlack text-white p-1 border-2 border-neoBlack shadow-[2px_2px_0px_0px_#D9FF00]">
                       <button
                         onClick={() => updateQuantity(item.id, -1, item.currentStock)}
-                        className="w-7 h-7 flex items-center justify-center hover:bg-sky-700 rounded-lg text-white font-bold"
+                        className="w-7 h-7 flex items-center justify-center bg-neoBlack text-neoPrimary hover:bg-slate-800 font-black text-base border border-neoPrimary"
                       >
                         <Minus className="w-4 h-4" />
                       </button>
-                      <span className="font-extrabold text-sm w-4 text-center">{qtyInCart}</span>
+                      <span className="font-mono font-black text-sm text-neoPrimary px-1">{qtyInCart}</span>
                       <button
                         onClick={() => updateQuantity(item.id, 1, item.currentStock)}
-                        className="w-7 h-7 flex items-center justify-center hover:bg-sky-700 rounded-lg text-white font-bold"
+                        className="w-7 h-7 flex items-center justify-center bg-neoBlack text-neoPrimary hover:bg-slate-800 font-black text-base border border-neoPrimary"
                       >
                         <Plus className="w-4 h-4" />
                       </button>
                     </div>
                   )
                 ) : (
-                  <span className="text-xs font-bold text-slate-400 bg-slate-200 px-3 py-1.5 rounded-xl">
+                  <span className="text-xs font-black text-slate-500 bg-slate-200 px-3 py-1.5 border-2 border-slate-400">
                     UNAVAILABLE
                   </span>
                 )}
               </div>
-            </div>
+            </NeoCard>
           );
         })}
       </div>
 
-      {/* Floating Bottom Cart Bar */}
+      {/* Floating Bottom Cart Sheet Bar */}
       {cartItemCount > 0 && (
-        <div className="fixed bottom-16 left-4 right-4 md:max-w-md md:mx-auto z-40 bg-slate-900 text-white p-4 rounded-2xl shadow-xl flex items-center justify-between border border-slate-800">
+        <div className="fixed bottom-16 left-4 right-4 md:max-w-md md:mx-auto z-40 bg-neoBlack text-white p-4 border-2.5 border-neoBlack shadow-[6px_6px_0px_0px_#D9FF00] flex items-center justify-between">
           <div>
-            <div className="text-xs font-semibold text-slate-400">
-              {cartItemCount} {cartItemCount === 1 ? 'item' : 'items'} in order
+            <div className="text-[11px] font-black uppercase text-slate-400">
+              {cartItemCount} {cartItemCount === 1 ? 'ITEM' : 'ITEMS'} IN CART
             </div>
-            <div className="text-lg font-extrabold">₹{cartSubtotal}</div>
+            <div className="text-2xl font-black font-mono text-neoPrimary">₹{cartSubtotal}</div>
           </div>
-          <button
+
+          <NeoButton
             onClick={handleCheckout}
             disabled={checkoutSubmitting || canteen?.isPaused}
-            className="px-6 py-2.5 bg-sky-500 hover:bg-sky-400 text-white font-bold text-sm rounded-xl transition-all shadow-md flex items-center gap-2 disabled:opacity-50"
+            variant="primary"
+            size="md"
           >
             {checkoutSubmitting ? (
-              <span>Processing...</span>
+              <span>PROCESSING...</span>
             ) : (
               <>
                 <ShoppingBag className="w-4 h-4" />
-                <span>Pay & Pre-Order</span>
+                <span>PLACE ORDER →</span>
               </>
             )}
-          </button>
+          </NeoButton>
         </div>
       )}
 

@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import OwnerNav from '@/components/OwnerNav';
+import { NeoCard } from '@/components/neo/NeoCard';
+import { NeoButton } from '@/components/neo/NeoButton';
+import { NeoBadge } from '@/components/neo/NeoBadge';
 import { ShoppingCart, CheckCircle2, Clock, ChevronDown, ChevronUp, PackageCheck } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 interface BatchOrder {
   id: string;
@@ -50,8 +54,22 @@ export default function OwnerOrdersPage() {
 
   useEffect(() => {
     fetchOrders();
-    const interval = setInterval(fetchOrders, 6000);
-    return () => clearInterval(interval);
+
+    // Live Supabase Realtime channel for instant order state updates!
+    const channel = supabase
+      .channel('public:orders:board')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders' },
+        () => {
+          fetchOrders();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const handleUpdateOrderStatus = async (orderId: string, newStatus: string) => {
@@ -83,32 +101,30 @@ export default function OwnerOrdersPage() {
   if (loading) {
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center">
-        <div className="w-8 h-8 border-4 border-sky-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="mt-3 text-sm text-slate-500 font-medium">Loading pickup batches...</p>
+        <div className="w-10 h-10 border-4 border-neoBlack border-t-neoPrimary rounded-none animate-spin"></div>
+        <p className="mt-3 text-xs font-black uppercase text-neoBlack tracking-wider">LOADING KITCHEN KANBAN BOARD...</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4 pb-20 md:pt-16">
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex justify-between items-center">
+    <div className="space-y-4 pb-24 md:pt-16">
+      {/* Top Banner */}
+      <div className="bg-neoBlack text-white p-5 border-2.5 border-neoBlack shadow-[4px_4px_0px_0px_#D9FF00] flex justify-between items-center">
         <div>
-          <h1 className="text-xl font-extrabold text-slate-900">Pickup Batches & Preparation</h1>
-          <p className="text-xs text-slate-500">Grouped 5-minute pre-order batches for bulk kitchen prep.</p>
+          <h1 className="text-2xl font-black font-display uppercase tracking-tight text-white">REALTIME KITCHEN KANBAN</h1>
+          <p className="text-xs font-bold text-slate-300">Grouped 5-minute pre-order batches for kitchen prep.</p>
         </div>
-        <button
-          onClick={fetchOrders}
-          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold"
-        >
-          Refresh
-        </button>
+        <NeoButton onClick={fetchOrders} variant="primary" size="sm">
+          REFRESH
+        </NeoButton>
       </div>
 
       {batches.length === 0 ? (
-        <div className="surface-card p-8 rounded-2xl text-center">
-          <ShoppingCart className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-          <p className="text-sm font-bold text-slate-700">No active batches right now.</p>
-        </div>
+        <NeoCard className="text-center py-12">
+          <ShoppingCart className="w-10 h-10 text-slate-400 mx-auto mb-2" />
+          <h3 className="text-base font-black font-display uppercase">NO ACTIVE KITCHEN BATCHES</h3>
+        </NeoCard>
       ) : (
         <div className="space-y-3">
           {batches.map((batch) => {
@@ -116,99 +132,108 @@ export default function OwnerOrdersPage() {
             const packingProgress = Math.round((batch.readyCount / (batch.totalOrders || 1)) * 100);
 
             return (
-              <div key={batch.id} className="surface-card rounded-2xl border border-slate-200 overflow-hidden">
-                {/* Batch Header */}
+              <NeoCard key={batch.id} className="p-0 overflow-hidden">
+                {/* Batch Header Bar */}
                 <div
                   onClick={() => setExpandedBatchId(isExpanded ? null : batch.id)}
-                  className="p-4 bg-white flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors"
+                  className="p-4 bg-white flex items-center justify-between cursor-pointer hover:bg-amber-50 border-b-2 border-neoBlack"
                 >
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-sky-600 uppercase">BATCH</span>
-                      <h3 className="text-base font-extrabold text-slate-900">{batch.windowLabel}</h3>
+                      <span className="text-xs font-black uppercase tracking-wider text-neoSecondary">BATCH</span>
+                      <h3 className="text-lg font-black font-mono text-neoBlack">{batch.windowLabel}</h3>
                     </div>
-                    <div className="flex items-center gap-3 text-xs font-semibold text-slate-500 mt-1">
-                      <span>{batch.totalOrders} Orders</span>
-                      <span className="text-emerald-700">{batch.readyCount} Ready</span>
-                      <span className="text-amber-700">{batch.prepCount} Preparing</span>
+                    <div className="flex items-center gap-3 text-xs font-extrabold text-slate-700 mt-1">
+                      <span>{batch.totalOrders} ORDERS</span>
+                      <span className="text-neoSuccess font-black">{batch.readyCount} READY</span>
+                      <span className="text-amber-600 font-black">{batch.prepCount} PREPARING</span>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <div className="hidden sm:block text-right">
-                      <span className="text-xs font-extrabold text-slate-700">{packingProgress}% Packed</span>
-                    </div>
-                    {isExpanded ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
+                    <span className="hidden sm:block text-xs font-black font-mono bg-neoPrimary px-2 py-0.5 border border-neoBlack">
+                      {packingProgress}% PACKED
+                    </span>
+                    {isExpanded ? <ChevronUp className="w-5 h-5 text-neoBlack" /> : <ChevronDown className="w-5 h-5 text-neoBlack" />}
                   </div>
                 </div>
 
-                {/* Expanded Batch Details & Orders */}
+                {/* Expanded Details */}
                 {isExpanded && (
-                  <div className="p-4 bg-slate-50 border-t border-slate-200 space-y-4">
-                    {/* Bulk Preparation Summary */}
+                  <div className="p-4 bg-amber-50/50 space-y-4">
+                    {/* Kitchen Bulk Prep Summary */}
                     {Object.keys(batch.prepSummary).length > 0 && (
-                      <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-2">
+                      <div className="bg-white p-4 border-2 border-neoBlack shadow-[3px_3px_0px_0px_#111111] space-y-2">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-slate-700 uppercase">Kitchen Bulk Prep Summary</span>
-                          <button
+                          <span className="text-xs font-black uppercase text-neoBlack font-display">
+                            KITCHEN BULK PREPARATION SUMMARY
+                          </span>
+                          <NeoButton
                             onClick={() => handleMarkBatchReady(batch.id)}
                             disabled={actionLoading}
-                            className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-sm"
+                            variant="success"
+                            size="sm"
                           >
-                            Mark All Batch Orders Ready
-                          </button>
+                            MARK ALL READY
+                          </NeoButton>
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
                           {Object.entries(batch.prepSummary).map(([item, count]) => (
-                            <div key={item} className="bg-slate-50 p-2 rounded-lg border border-slate-200 text-xs font-bold flex justify-between">
+                            <div key={item} className="bg-neoPrimary p-2 border-2 border-neoBlack text-xs font-black flex justify-between">
                               <span>{item}</span>
-                              <span className="text-sky-700">× {count}</span>
+                              <span className="font-mono text-neoBlack">× {count}</span>
                             </div>
                           ))}
                         </div>
                       </div>
                     )}
 
-                    {/* Order Cards List */}
+                    {/* Batch Orders Kanban Cards */}
                     <div className="space-y-2">
-                      <span className="text-xs font-bold text-slate-500 uppercase">Batch Orders List</span>
+                      <span className="text-xs font-black uppercase tracking-wider text-neoBlack">BATCH ORDERS</span>
                       {batch.orders.map((ord) => (
-                        <div key={ord.id} className="bg-white p-3.5 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div key={ord.id} className="bg-white p-3.5 border-2 border-neoBlack shadow-[2px_2px_0px_0px_#111111] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-black text-slate-900">{ord.publicOrderCode}</span>
-                              <span className="text-xs font-semibold text-slate-600">• {ord.studentName}</span>
+                              <span className="text-base font-black font-mono text-neoBlack">{ord.publicOrderCode}</span>
+                              <span className="text-xs font-extrabold text-slate-700">• {ord.studentName}</span>
                             </div>
-                            <div className="text-xs text-slate-500 font-medium mt-0.5">
+                            <div className="text-xs text-slate-600 font-bold mt-0.5">
                               {ord.items.map((i) => `${i.name} × ${i.quantity}`).join(', ')}
                             </div>
                           </div>
 
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-extrabold text-slate-800 mr-2">₹{ord.subtotal}</span>
+                            <span className="text-sm font-black font-mono text-neoBlack mr-2">₹{ord.subtotal}</span>
+
                             {ord.orderStatus === 'CONFIRMED' && (
-                              <button
+                              <NeoButton
                                 onClick={() => handleUpdateOrderStatus(ord.id, 'PREPARING')}
                                 disabled={actionLoading}
-                                className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-lg"
+                                variant="secondary"
+                                size="sm"
                               >
-                                Start Prep
-                              </button>
+                                START PREP
+                              </NeoButton>
                             )}
+
                             {(ord.orderStatus === 'CONFIRMED' || ord.orderStatus === 'PREPARING') && (
-                              <button
+                              <NeoButton
                                 onClick={() => handleUpdateOrderStatus(ord.id, 'READY')}
                                 disabled={actionLoading}
-                                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg"
+                                variant="primary"
+                                size="sm"
                               >
-                                Mark Ready
-                              </button>
+                                MARK READY
+                              </NeoButton>
                             )}
+
                             {ord.orderStatus === 'READY' && (
-                              <span className="status-badge status-live">READY FOR PICKUP</span>
+                              <NeoBadge variant="ready">READY FOR PICKUP</NeoBadge>
                             )}
+
                             {ord.orderStatus === 'COLLECTED' && (
-                              <span className="status-badge status-live">COLLECTED</span>
+                              <NeoBadge variant="collected">COLLECTED</NeoBadge>
                             )}
                           </div>
                         </div>
@@ -216,7 +241,7 @@ export default function OwnerOrdersPage() {
                     </div>
                   </div>
                 )}
-              </div>
+              </NeoCard>
             );
           })}
         </div>
