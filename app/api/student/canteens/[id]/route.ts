@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { supabaseGetCanteenDetail } from '@/lib/supabase-service';
 import { requireAuth } from '@/lib/auth';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(
   req: NextRequest,
@@ -12,45 +14,11 @@ export async function GET(
   }
 
   try {
-    const canteen = await db.canteen.findUnique({
-      where: { id: params.id },
-      include: {
-        capacitySettings: true,
-        menuItems: {
-          where: { active: true },
-          orderBy: [{ category: 'asc' }, { name: 'asc' }],
-        },
-      },
-    });
-
-    if (!canteen) {
-      return NextResponse.json({ error: 'Canteen not found.' }, { status: 404 });
-    }
-
-    const categories = Array.from(new Set(canteen.menuItems.map((item) => item.category)));
-
-    return NextResponse.json({
-      canteen: {
-        id: canteen.id,
-        name: canteen.name,
-        location: canteen.location,
-        status: canteen.capacitySettings?.isPaused ? 'PAUSED' : canteen.status,
-        isPaused: canteen.capacitySettings?.isPaused || false,
-      },
-      categories: ['All', ...categories],
-      menuItems: canteen.menuItems.map((item) => ({
-        id: item.id,
-        name: item.name,
-        category: item.category,
-        description: item.description,
-        price: item.price,
-        currentStock: item.currentStock,
-        stockMode: item.stockMode,
-        isAvailable: item.currentStock > 0,
-      })),
-    });
+    const detail = await supabaseGetCanteenDetail(params.id);
+    return NextResponse.json(detail);
   } catch (error: any) {
-    console.error('Error fetching canteen details:', error);
-    return NextResponse.json({ error: 'Failed to retrieve menu.' }, { status: 500 });
+    console.error('Error fetching canteen menu from Supabase:', error);
+    return NextResponse.json({ error: error.message || 'Failed to retrieve menu.' }, { status: 500 });
   }
 }
+

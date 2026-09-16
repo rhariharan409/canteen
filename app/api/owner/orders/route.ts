@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
+import { getServiceSupabase } from '@/lib/supabase';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req, ['OWNER', 'ADMIN']);
@@ -9,81 +11,84 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const canteen = await db.canteen.findFirst({
-      where: auth.user.role === 'ADMIN' ? {} : { ownerId: auth.user.id },
-    });
-
-    if (!canteen) {
-      return NextResponse.json({ error: 'No canteen assigned.' }, { status: 404 });
+    const supabase = getServiceSupabase();
+    let canteenQuery = supabase.from('canteens').select('id, name');
+    if (auth.user.role !== 'ADMIN') {
+      canteenQuery = canteenQuery.eq('owner_id', auth.user.id);
     }
 
-    const batches = await db.pickupBatch.findMany({
-      where: { canteenId: canteen.id },
-      include: {
-        orders: {
-          include: {
-            items: true,
-            student: { select: { name: true, phone: true } },
-            otpCredential: { select: { otpCode: true, isUsed: true } },
-          },
-          orderBy: { createdAt: 'asc' },
-        },
-      },
-      orderBy: { startTime: 'asc' },
-    });
+    const { data: canteens } = await canteenQuery;
+    const canteen = canteens && canteens.length > 0 ? canteens[0] : null;
 
-    const formattedBatches = batches.map((b) => {
-      const formatTime = (d: Date) =>
-        d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-      const windowLabel = `${formatTime(b.startTime)} – ${formatTime(b.endTime)}`;
+    if (!canteen) {
+      return NextResponse.json({ error: 'No canteen assigned in Supabase.' }, { status: 404 });
+    }
 
-      const totalOrders = b.orders.length;
-      const readyCount = b.orders.filter((o) => o.orderStatus === 'READY').length;
-      const prepCount = b.orders.filter((o) => ['CONFIRMED', 'PREPARING'].includes(o.orderStatus)).length;
-      const collectedCount = b.orders.filter((o) => o.orderStatus === 'COLLECTED').length;
+    const { data: orders, error } = await supabase
+      .from('orders')
+      .select(`
+        id,
+        order_code,
+        status,
+        subtotal,
+        pickup_window,
+        confirmed_at,
+        profiles ( full_name, phone ),
+        order_items ( id, item_name, quantity, unit_price ),
+        otp_credentials ( otp_code, is_used )
+      `)
+      .eq('canteen_id', canteen.id)
+      .order('created_at', { ascending: true });
 
-      // Preparation summary for this batch
-      const prepSummary: Record<string, number> = {};
-      b.orders.forEach((o) => {
-        if (['CONFIRMED', 'PREPARING'].includes(o.orderStatus)) {
-          o.items.forEach((item) => {
-            prepSummary[item.itemName] = (prepSummary[item.itemName] || 0) + item.quantity;
-          });
-        }
-      });
+    if (error) {
+      throw new Error(`Supabase orders query error: ${error.message}`);
+    }
 
+    const formattedOrders = (orders || []).map((o: any) => {
+      const otpCred = Array.isArray(o.otp_credentials) ? o.otp_credentials[0] : o.otp_credentials;
       return {
-        id: b.id,
-        windowLabel,
-        totalOrders,
-        readyCount,
-        prepCount,
-        collectedCount,
-        prepSummary,
-        orders: b.orders.map((o) => ({
-          id: o.id,
-          publicOrderCode: o.publicOrderCode,
-          studentName: o.student.name,
-          studentPhone: o.student.phone,
-          orderStatus: o.orderStatus,
-          subtotal: o.subtotal,
-          pickupWindow: o.pickupWindow,
-          otpCode: o.otpCredential?.otpCode,
-          isOtpUsed: o.otpCredential?.isUsed || false,
-          items: o.items.map((i) => ({
-            name: i.itemName,
-            quantity: i.quantity,
-            unitPrice: i.unitPrice,
-          })),
-          confirmedAt: o.confirmedAt,
+        id: o.id,
+        publicOrderCode: o.order_code,
+        studentName: (o.profiles as any)?.full_name || 'Student',
+        studentPhone: (o.profiles as any)?.phone || 'N/A',
+        orderStatus: o.status,
+        subtotal: parseFloat(o.subtotal),
+        pickupWindow: o.pickup_window,
+        otpCode: otpCred?.otp_code || otpCred?.otpCode || null,
+        isOtpUsed: otpCred?.is_used || false,
+        items: (o.order_items || []).map((i: any) => ({
+          name: i.item_name,
+          quantity: i.quantity,
+          unitPrice: parseFloat(i.unit_price),
         })),
+        confirmedAt: o.confirmed_at,
       };
     });
 
-    return NextResponse.json({ batches: formattedBatches });
+    const prepSummary: Record<string, number> = {};
+    formattedOrders.forEach((o: any) => {
+      if (['CONFIRMED', 'PREPARING'].includes(o.orderStatus)) {
+        o.items.forEach((item: any) => {
+          prepSummary[item.name] = (prepSummary[item.name] || 0) + item.quantity;
+        });
+      }
+    });
+
+    const singleBatch = {
+      id: 'batch_active',
+      windowLabel: '10:35 – 10:40',
+      totalOrders: formattedOrders.length,
+      readyCount: formattedOrders.filter((o: any) => o.orderStatus === 'READY').length,
+      prepCount: formattedOrders.filter((o: any) => ['CONFIRMED', 'PREPARING'].includes(o.orderStatus)).length,
+      collectedCount: formattedOrders.filter((o: any) => o.orderStatus === 'COLLECTED').length,
+      prepSummary,
+      orders: formattedOrders,
+    };
+
+    return NextResponse.json({ batches: [singleBatch] });
   } catch (error: any) {
     console.error('Owner Orders fetch error:', error);
-    return NextResponse.json({ error: 'Failed to fetch orders.' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Failed to fetch orders from Supabase.' }, { status: 500 });
   }
 }
 
@@ -94,71 +99,42 @@ export async function PUT(req: NextRequest) {
   }
 
   try {
-    const { orderId, newStatus, batchId, markBatchReady } = await req.json();
+    const { orderId, newStatus, markBatchReady } = await req.json();
+    const supabase = getServiceSupabase();
 
-    if (markBatchReady && batchId) {
-      // Batch-level preparation action: Mark all CONFIRMED / PREPARING orders in batch as READY
-      await db.order.updateMany({
-        where: {
-          batchId,
-          orderStatus: { in: ['CONFIRMED', 'PREPARING'] },
-        },
-        data: {
-          orderStatus: 'READY',
-          readyAt: new Date(),
-        },
-      });
+    if (markBatchReady) {
+      await supabase
+        .from('orders')
+        .update({
+          status: 'READY',
+          ready_at: new Date().toISOString(),
+        })
+        .in('status', ['CONFIRMED', 'PREPARING']);
 
-      return NextResponse.json({ success: true, message: 'All orders in batch marked as READY!' });
+      return NextResponse.json({ success: true, message: 'All active orders marked as READY in Supabase!' });
     }
 
     if (!orderId || !newStatus) {
       return NextResponse.json({ error: 'Order ID and new status are required.' }, { status: 400 });
     }
 
-    // State machine check
-    const validTransitions: Record<string, string[]> = {
-      CONFIRMED: ['PREPARING', 'READY', 'CANCELLED'],
-      PREPARING: ['READY', 'CANCELLED'],
-      READY: ['COLLECTED', 'EXPIRED'],
-    };
+    const { data: updated, error } = await supabase
+      .from('orders')
+      .update({
+        status: newStatus,
+        ...(newStatus === 'READY' ? { ready_at: new Date().toISOString() } : {}),
+      })
+      .eq('id', orderId)
+      .select()
+      .single();
 
-    const currentOrder = await db.order.findUnique({ where: { id: orderId } });
-    if (!currentOrder) {
-      return NextResponse.json({ error: 'Order not found.' }, { status: 404 });
+    if (error) {
+      throw new Error(`Supabase update order error: ${error.message}`);
     }
-
-    const allowed = validTransitions[currentOrder.orderStatus] || [];
-    if (!allowed.includes(newStatus)) {
-      return NextResponse.json(
-        { error: `Invalid transition from ${currentOrder.orderStatus} to ${newStatus}.` },
-        { status: 400 }
-      );
-    }
-
-    const updated = await db.order.update({
-      where: { id: orderId },
-      data: {
-        orderStatus: newStatus,
-        ...(newStatus === 'READY' ? { readyAt: new Date() } : {}),
-      },
-    });
-
-    // Notify student
-    await db.notification.create({
-      data: {
-        userId: currentOrder.studentId,
-        title: newStatus === 'READY' ? 'Order Ready for Pickup!' : `Order Status: ${newStatus}`,
-        message:
-          newStatus === 'READY'
-            ? `Your order ${currentOrder.publicOrderCode} is ready! Please proceed to canteen counter.`
-            : `Order ${currentOrder.publicOrderCode} is now ${newStatus.toLowerCase()}.`,
-        type: `ORDER_${newStatus}`,
-      },
-    });
 
     return NextResponse.json({ success: true, order: updated });
   } catch (error: any) {
-    return NextResponse.json({ error: 'Failed to update order status.' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Failed to update order status in Supabase.' }, { status: 500 });
   }
 }
+

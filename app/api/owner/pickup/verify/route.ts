@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
-import { verifyOtpAndCompletePickup } from '@/lib/canteen-service';
+import { supabaseVerifyOtp } from '@/lib/supabase-service';
+import { getServiceSupabase } from '@/lib/supabase';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   const auth = await requireAuth(req, ['OWNER', 'ADMIN']);
@@ -16,42 +18,54 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Order ID is required.' }, { status: 400 });
     }
 
-    const canteen = await db.canteen.findFirst({
-      where: auth.user.role === 'ADMIN' ? {} : { ownerId: auth.user.id },
-    });
+    const supabase = getServiceSupabase();
+    let canteenQuery = supabase.from('canteens').select('id, name');
+    if (auth.user.role !== 'ADMIN') {
+      canteenQuery = canteenQuery.eq('owner_id', auth.user.id);
+    }
+
+    const { data: canteens } = await canteenQuery;
+    const canteen = canteens && canteens.length > 0 ? canteens[0] : null;
 
     if (!canteen) {
-      return NextResponse.json({ error: 'No canteen assigned to your account.' }, { status: 404 });
+      return NextResponse.json({ error: 'No canteen assigned to your account in Supabase.' }, { status: 404 });
     }
 
     // Step 1: Preview / Lookup Order before final completion
     if (action === 'PREVIEW') {
       const cleanCode = publicOrderCode.trim().toUpperCase();
-      const order = await db.order.findFirst({
-        where: {
-          canteenId: canteen.id,
-          publicOrderCode: cleanCode,
-        },
-        include: {
-          student: { select: { name: true, phone: true } },
-          items: true,
-          otpCredential: { select: { otpCode: true, isUsed: true, attempts: true } },
-        },
-      });
+      const { data: order, error } = await supabase
+        .from('orders')
+        .select(`
+          id,
+          order_code,
+          status,
+          subtotal,
+          pickup_window,
+          profiles ( full_name, phone ),
+          order_items ( id, item_name, quantity, unit_price, total_price ),
+          otp_credentials ( otp_code, is_used, attempts )
+        `)
+        .eq('canteen_id', canteen.id)
+        .eq('order_code', cleanCode)
+        .single();
 
-      if (!order) {
-        return NextResponse.json({ error: `Order ID "${cleanCode}" not found for this canteen.` }, { status: 404 });
+      if (error || !order) {
+        return NextResponse.json({ error: `Order ID "${cleanCode}" not found for this canteen in Supabase.` }, { status: 404 });
       }
 
-      if (order.orderStatus === 'COLLECTED') {
+      if (order.status === 'COLLECTED') {
         return NextResponse.json({ error: `Order ${cleanCode} has already been collected.` }, { status: 400 });
       }
 
-      if (otpCode && order.otpCredential && order.otpCredential.otpCode !== otpCode.trim()) {
-        await db.otpCredential.update({
-          where: { orderId: order.id },
-          data: { attempts: { increment: 1 } },
-        });
+      const otpCred = Array.isArray(order.otp_credentials) ? order.otp_credentials[0] : order.otp_credentials;
+
+      if (otpCode && otpCred && otpCred.otp_code !== otpCode.trim()) {
+        await supabase
+          .from('otp_credentials')
+          .update({ attempts: (otpCred.attempts || 0) + 1 })
+          .eq('order_id', order.id);
+
         return NextResponse.json({ error: 'Incorrect OTP. Please try again.' }, { status: 400 });
       }
 
@@ -59,24 +73,24 @@ export async function POST(req: NextRequest) {
         success: true,
         order: {
           id: order.id,
-          publicOrderCode: order.publicOrderCode,
-          studentName: order.student.name,
-          studentPhone: order.student.phone,
-          orderStatus: order.orderStatus,
+          publicOrderCode: order.order_code,
+          studentName: (order.profiles as any)?.full_name || 'Student',
+          studentPhone: (order.profiles as any)?.phone || 'N/A',
+          orderStatus: order.status,
           subtotal: order.subtotal,
-          pickupWindow: order.pickupWindow,
-          otpCode: order.otpCredential?.otpCode,
-          items: order.items,
+          pickupWindow: order.pickup_window,
+          otpCode: otpCred?.otp_code,
+          items: order.order_items || [],
         },
       });
     }
 
-    // Step 2: Finalize Pickup Verification & Mark COLLECTED
+    // Step 2: Finalize Pickup Verification & Mark COLLECTED in Supabase
     if (!otpCode) {
       return NextResponse.json({ error: 'OTP is required to complete pickup.' }, { status: 400 });
     }
 
-    const completedOrder = await verifyOtpAndCompletePickup(canteen.id, publicOrderCode, otpCode);
+    const completedOrder = await supabaseVerifyOtp(canteen.id, publicOrderCode, otpCode);
 
     return NextResponse.json({
       success: true,
@@ -84,7 +98,7 @@ export async function POST(req: NextRequest) {
       order: {
         id: completedOrder.id,
         publicOrderCode: completedOrder.publicOrderCode,
-        studentName: completedOrder.student.name,
+        studentName: completedOrder.studentName,
         orderStatus: completedOrder.orderStatus,
         collectedAt: completedOrder.collectedAt,
         items: completedOrder.items,
@@ -92,6 +106,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('OTP Verification Error:', error);
-    return NextResponse.json({ error: error.message || 'OTP Verification failed.' }, { status: 400 });
+    return NextResponse.json({ error: error.message || 'OTP Verification failed on Supabase.' }, { status: 400 });
   }
 }
+

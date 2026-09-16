@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import bcrypt from 'bcryptjs';
-import { db } from '@/lib/db';
+import { supabaseLogin } from '@/lib/supabase-service';
 import { signToken } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
@@ -13,30 +12,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Email and password are required.' }, { status: 400 });
     }
 
-    const cleanEmail = email.trim().toLowerCase();
-    const user = await db.user.findUnique({
-      where: { email: cleanEmail },
-      include: {
-        canteens: true,
-      },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
-    }
-
-    if (user.status === 'SUSPENDED') {
-      return NextResponse.json({ error: 'Your account has been suspended. Contact administrator.' }, { status: 403 });
-    }
-
-    if (user.status === 'PENDING') {
-      return NextResponse.json({ error: 'Your owner account is pending approval by campus administrator.' }, { status: 403 });
-    }
-
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
-    }
+    const user = await supabaseLogin(email, password);
 
     const token = signToken({
       userId: user.id,
@@ -59,7 +35,7 @@ export async function POST(req: NextRequest) {
         name: user.name,
         email: user.email,
         role: user.role,
-        assignedCanteenId: user.canteens[0]?.id || null,
+        assignedCanteenId: user.assignedCanteenId || null,
       },
       redirectUrl,
     });
@@ -75,6 +51,7 @@ export async function POST(req: NextRequest) {
     return response;
   } catch (error: any) {
     console.error('Login error:', error);
-    return NextResponse.json({ error: 'Failed to process login.' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Failed to process login.' }, { status: 401 });
   }
 }
+

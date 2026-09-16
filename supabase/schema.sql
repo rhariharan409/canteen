@@ -5,9 +5,10 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- 2. PROFILES TABLE (Syncs with Supabase Auth)
 CREATE TABLE IF NOT EXISTS profiles (
-  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   full_name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL,
+  password_hash TEXT,
   phone TEXT,
   role TEXT NOT NULL DEFAULT 'STUDENT' CHECK (role IN ('STUDENT', 'OWNER', 'ADMIN')),
   status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'PENDING', 'SUSPENDED')),

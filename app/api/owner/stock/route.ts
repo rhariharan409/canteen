@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
+import { getServiceSupabase } from '@/lib/supabase';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req, ['OWNER', 'ADMIN']);
@@ -9,32 +11,43 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const canteen = await db.canteen.findFirst({
-      where: auth.user.role === 'ADMIN' ? {} : { ownerId: auth.user.id },
-    });
-
-    if (!canteen) {
-      return NextResponse.json({ error: 'No canteen assigned.' }, { status: 404 });
+    const supabase = getServiceSupabase();
+    let canteenQuery = supabase.from('canteens').select('id');
+    if (auth.user.role !== 'ADMIN') {
+      canteenQuery = canteenQuery.eq('owner_id', auth.user.id);
     }
 
-    const items = await db.menuItem.findMany({
-      where: { canteenId: canteen.id },
-      select: {
-        id: true,
-        name: true,
-        category: true,
-        price: true,
-        stockMode: true,
-        currentStock: true,
-        dailyCapacity: true,
-        active: true,
-      },
-      orderBy: [{ category: 'asc' }, { name: 'asc' }],
-    });
+    const { data: canteens } = await canteenQuery;
+    const canteen = canteens && canteens.length > 0 ? canteens[0] : null;
 
-    return NextResponse.json({ items });
+    if (!canteen) {
+      return NextResponse.json({ error: 'No canteen assigned in Supabase.' }, { status: 404 });
+    }
+
+    const { data: items, error } = await supabase
+      .from('menu_items')
+      .select('*')
+      .eq('canteen_id', canteen.id)
+      .order('category', { ascending: true })
+      .order('name', { ascending: true });
+
+    if (error) {
+      throw new Error(`Supabase stock list error: ${error.message}`);
+    }
+
+    const formatted = (items || []).map((i: any) => ({
+      id: i.id,
+      name: i.name,
+      category: i.category,
+      price: parseFloat(i.price),
+      stockMode: i.stock_type || 'COUNT',
+      currentStock: i.current_stock,
+      active: i.is_available,
+    }));
+
+    return NextResponse.json({ items: formatted });
   } catch (error: any) {
-    return NextResponse.json({ error: 'Failed to fetch stock list.' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Failed to fetch stock list from Supabase.' }, { status: 500 });
   }
 }
 
@@ -51,12 +64,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Item ID is required.' }, { status: 400 });
     }
 
-    const item = await db.menuItem.findUnique({ where: { id: itemId } });
-    if (!item) {
-      return NextResponse.json({ error: 'Menu item not found.' }, { status: 404 });
+    const supabase = getServiceSupabase();
+    const { data: item, error: fetchErr } = await supabase
+      .from('menu_items')
+      .select('*')
+      .eq('id', itemId)
+      .single();
+
+    if (fetchErr || !item) {
+      return NextResponse.json({ error: 'Menu item not found in Supabase.' }, { status: 404 });
     }
 
-    const prevStock = item.currentStock;
+    const prevStock = item.current_stock;
     let targetStock = prevStock;
 
     if (newStock !== undefined) {
@@ -71,21 +90,23 @@ export async function POST(req: NextRequest) {
 
     const changeAmount = targetStock - prevStock;
 
-    const updated = await db.menuItem.update({
-      where: { id: itemId },
-      data: { currentStock: targetStock },
-    });
+    const { data: updated, error: updateErr } = await supabase
+      .from('menu_items')
+      .update({ current_stock: targetStock })
+      .eq('id', itemId)
+      .select()
+      .single();
+
+    if (updateErr) {
+      throw new Error(`Supabase update stock error: ${updateErr.message}`);
+    }
 
     if (changeAmount !== 0) {
-      await db.stockTransaction.create({
-        data: {
-          menuItemId: itemId,
-          changeAmount,
-          previousStock: prevStock,
-          newStock: targetStock,
-          transactionType: 'MANUAL_ADJUSTMENT',
-          note: `Owner manual stock adjustment (${changeAmount > 0 ? '+' : ''}${changeAmount})`,
-        },
+      await supabase.from('stock_transactions').insert({
+        id: crypto.randomUUID(),
+        menu_item_id: itemId,
+        quantity_change: changeAmount,
+        reason: `Owner manual stock adjustment (${changeAmount > 0 ? '+' : ''}${changeAmount})`,
       });
     }
 
@@ -93,12 +114,13 @@ export async function POST(req: NextRequest) {
       success: true,
       item: {
         id: updated.id,
-        currentStock: updated.currentStock,
-        status: updated.currentStock > 0 ? 'Available' : 'Sold Out',
+        currentStock: updated.current_stock,
+        status: updated.current_stock > 0 ? 'Available' : 'Sold Out',
       },
     });
   } catch (error: any) {
     console.error('Stock Update Error:', error);
-    return NextResponse.json({ error: 'Failed to update stock.' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Failed to update stock in Supabase.' }, { status: 500 });
   }
 }
+

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
+import { supabaseGetOwnerDashboard } from '@/lib/supabase-service';
+import { getServiceSupabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,99 +12,11 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const canteen = await db.canteen.findFirst({
-      where: auth.user.role === 'ADMIN' ? {} : { ownerId: auth.user.id },
-      include: {
-        capacitySettings: true,
-      },
-    });
-
-    if (!canteen) {
-      return NextResponse.json({ error: 'No canteen assigned to this owner account.' }, { status: 404 });
-    }
-
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const todayOrders = await db.order.findMany({
-      where: {
-        canteenId: canteen.id,
-        createdAt: { gte: startOfDay },
-      },
-      include: {
-        items: true,
-      },
-    });
-
-    const totalOrdersCount = todayOrders.length;
-    const readyCount = todayOrders.filter((o) => o.orderStatus === 'READY').length;
-    const preparingCount = todayOrders.filter((o) => o.orderStatus === 'PREPARING' || o.orderStatus === 'CONFIRMED').length;
-    const collectedCount = todayOrders.filter((o) => o.orderStatus === 'COLLECTED').length;
-
-    const maxActive = canteen.capacitySettings?.maxActiveOrders || 100;
-    const activeCount = preparingCount + readyCount;
-    const capacityPercentage = Math.min(100, Math.round((activeCount / maxActive) * 100));
-
-    const activeBatches = await db.pickupBatch.findMany({
-      where: {
-        canteenId: canteen.id,
-      },
-      include: {
-        orders: {
-          include: { items: true },
-        },
-      },
-      orderBy: { startTime: 'asc' },
-    });
-
-    const currentBatch = activeBatches.find((b) => b.orders.some((o) => o.orderStatus !== 'COLLECTED')) || activeBatches[0];
-
-    const prepSummary: Record<string, number> = {};
-    let currentBatchReadyCount = 0;
-    let currentBatchPrepCount = 0;
-
-    if (currentBatch) {
-      for (const ord of currentBatch.orders) {
-        if (ord.orderStatus === 'READY') currentBatchReadyCount++;
-        else if (['CONFIRMED', 'PREPARING'].includes(ord.orderStatus)) currentBatchPrepCount++;
-
-        if (['CONFIRMED', 'PREPARING'].includes(ord.orderStatus)) {
-          for (const item of ord.items) {
-            prepSummary[item.itemName] = (prepSummary[item.itemName] || 0) + item.quantity;
-          }
-        }
-      }
-    }
-
-    return NextResponse.json({
-      canteen: {
-        id: canteen.id,
-        name: canteen.name,
-        location: canteen.location,
-        status: canteen.status,
-        isPaused: canteen.capacitySettings?.isPaused || false,
-      },
-      metrics: {
-        todayOrders: totalOrdersCount,
-        ready: readyCount,
-        preparing: preparingCount,
-        collected: collectedCount,
-        capacityPercentage,
-      },
-      currentBatch: currentBatch
-        ? {
-            id: currentBatch.id,
-            windowLabel: `${currentBatch.startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} – ${currentBatch.endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
-            totalOrders: currentBatch.orders.length,
-            preparing: currentBatchPrepCount,
-            ready: currentBatchReadyCount,
-            prepSummary,
-          }
-        : null,
-    });
+    const dashboardData = await supabaseGetOwnerDashboard(auth.user.id, auth.user.role === 'ADMIN');
+    return NextResponse.json(dashboardData);
   } catch (error: any) {
     console.error('Owner Dashboard API Error:', error);
-    return NextResponse.json({ error: 'Failed to load dashboard metrics.' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Failed to load dashboard metrics from Supabase.' }, { status: 500 });
   }
 }
 
@@ -115,26 +28,46 @@ export async function POST(req: NextRequest) {
 
   try {
     const { action } = await req.json();
+    const supabase = getServiceSupabase();
 
-    const canteen = await db.canteen.findFirst({
-      where: auth.user.role === 'ADMIN' ? {} : { ownerId: auth.user.id },
-    });
+    let canteenQuery = supabase.from('canteens').select('id');
+    if (auth.user.role !== 'ADMIN') {
+      canteenQuery = canteenQuery.eq('owner_id', auth.user.id);
+    }
+
+    const { data: canteens } = await canteenQuery;
+    const canteen = canteens && canteens.length > 0 ? canteens[0] : null;
 
     if (!canteen) {
-      return NextResponse.json({ error: 'No canteen assigned.' }, { status: 404 });
+      return NextResponse.json({ error: 'No canteen assigned in Supabase.' }, { status: 404 });
     }
 
     if (action === 'PAUSE_ORDERS' || action === 'RESUME_ORDERS') {
       const isPaused = action === 'PAUSE_ORDERS';
-      await db.capacitySettings.upsert({
-        where: { canteenId: canteen.id },
-        update: { isPaused },
-        create: { canteenId: canteen.id, isPaused },
-      });
+
+      // Upsert into capacity_settings in Supabase
+      const { data: existingSettings } = await supabase
+        .from('capacity_settings')
+        .select('id')
+        .eq('canteen_id', canteen.id)
+        .single();
+
+      if (existingSettings) {
+        await supabase
+          .from('capacity_settings')
+          .update({ is_paused: isPaused, updated_at: new Date().toISOString() })
+          .eq('canteen_id', canteen.id);
+      } else {
+        await supabase.from('capacity_settings').insert({
+          id: crypto.randomUUID(),
+          canteen_id: canteen.id,
+          is_paused: isPaused,
+        });
+      }
 
       return NextResponse.json({
         success: true,
-        message: isPaused ? 'Orders temporarily paused.' : 'Orders resumed.',
+        message: isPaused ? 'Orders temporarily paused in Supabase.' : 'Orders resumed in Supabase.',
         isPaused,
       });
     }
@@ -142,6 +75,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid action.' }, { status: 400 });
   } catch (error: any) {
     console.error('Owner Dashboard Action Error:', error);
-    return NextResponse.json({ error: 'Action failed.' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Action failed on Supabase.' }, { status: 500 });
   }
 }
+

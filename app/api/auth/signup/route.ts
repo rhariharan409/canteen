@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import bcrypt from 'bcryptjs';
-import { db } from '@/lib/db';
+import { supabaseSignup } from '@/lib/supabase-service';
 import { signToken } from '@/lib/auth';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,30 +12,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Name, email, and password are required.' }, { status: 400 });
     }
 
-    const cleanEmail = email.trim().toLowerCase();
-    const existing = await db.user.findUnique({ where: { email: cleanEmail } });
-    if (existing) {
-      return NextResponse.json({ error: 'An account with this email already exists.' }, { status: 400 });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // SECURITY ENFORCEMENT: Self-signup role is ALWAYS STUDENT or OWNER (PENDING).
-    // An owner is NEVER self-approved. Role is OWNER with status PENDING.
     const isOwnerRequest = requestedRole === 'OWNER';
-    const role = isOwnerRequest ? 'OWNER' : 'STUDENT';
-    const status = isOwnerRequest ? 'PENDING' : 'ACTIVE';
 
-    const user = await db.user.create({
-      data: {
-        name: name.trim(),
-        email: cleanEmail,
-        password: hashedPassword,
-        phone: phone ? phone.trim() : null,
-        role,
-        status,
-      },
-    });
+    const user = await supabaseSignup(
+      name,
+      email,
+      password,
+      phone || null,
+      isOwnerRequest ? 'OWNER' : 'STUDENT'
+    );
 
     if (isOwnerRequest) {
       return NextResponse.json({
@@ -47,7 +33,7 @@ export async function POST(req: NextRequest) {
     const token = signToken({
       userId: user.id,
       email: user.email,
-      name: user.name,
+      name: user.full_name,
       role: 'STUDENT',
     });
 
@@ -55,7 +41,7 @@ export async function POST(req: NextRequest) {
       success: true,
       user: {
         id: user.id,
-        name: user.name,
+        name: user.full_name,
         email: user.email,
         role: user.role,
       },
@@ -73,6 +59,7 @@ export async function POST(req: NextRequest) {
     return response;
   } catch (error: any) {
     console.error('Signup error:', error);
-    return NextResponse.json({ error: 'Failed to create user account.' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Failed to create user account on Supabase.' }, { status: 500 });
   }
 }
+
