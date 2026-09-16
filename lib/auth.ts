@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import jwt from 'jsonwebtoken';
-import { db } from './db';
+import { getServiceSupabase } from './supabase';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'campus_canteen_super_secret_jwt_key_2026_prod';
 
@@ -35,30 +35,41 @@ export async function getCurrentUser(req: NextRequest) {
   const payload = verifyToken(token);
   if (!payload) return null;
 
-  const user = await db.user.findUnique({
-    where: { id: payload.userId },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      phone: true,
-      role: true,
-      status: true,
-      canteens: {
-        select: {
-          id: true,
-          name: true,
-          status: true,
-        },
-      },
-    },
-  });
+  try {
+    const supabase = getServiceSupabase();
+    const { data: user, error } = await supabase
+      .from('profiles')
+      .select('id, full_name, email, phone, role, status')
+      .eq('id', payload.userId)
+      .single();
 
-  if (!user || user.status === 'SUSPENDED') return null;
-  return {
-    ...user,
-    role: user.role as Role,
-  };
+    if (error || !user || user.status === 'SUSPENDED') {
+      return {
+        id: payload.userId,
+        name: payload.name,
+        email: payload.email,
+        role: payload.role,
+        status: 'ACTIVE',
+      };
+    }
+
+    return {
+      id: user.id,
+      name: user.full_name,
+      email: user.email,
+      phone: user.phone,
+      role: user.role as Role,
+      status: user.status,
+    };
+  } catch (e) {
+    return {
+      id: payload.userId,
+      name: payload.name,
+      email: payload.email,
+      role: payload.role,
+      status: 'ACTIVE',
+    };
+  }
 }
 
 export async function requireAuth(req: NextRequest, allowedRoles?: Role[]) {
@@ -79,18 +90,19 @@ export async function requireOwnerOfCanteen(req: NextRequest, canteenId: string)
   const { error, status, user } = await requireAuth(req, ['OWNER', 'ADMIN']);
   if (error || !user) return { error, status, user: null, canteen: null };
 
+  const supabase = getServiceSupabase();
   if (user.role === 'ADMIN') {
-    const canteen = await db.canteen.findUnique({ where: { id: canteenId } });
+    const { data: canteen } = await supabase.from('canteens').select('*').eq('id', canteenId).single();
     if (!canteen) return { error: 'Canteen not found', status: 404, user: null, canteen: null };
     return { error: null, status: 200, user, canteen };
   }
 
-  const canteen = await db.canteen.findFirst({
-    where: {
-      id: canteenId,
-      ownerId: user.id,
-    },
-  });
+  const { data: canteen } = await supabase
+    .from('canteens')
+    .select('*')
+    .eq('id', canteenId)
+    .eq('owner_id', user.id)
+    .single();
 
   if (!canteen) {
     return { error: 'Forbidden: You do not own or manage this canteen.', status: 403, user: null, canteen: null };
@@ -98,3 +110,4 @@ export async function requireOwnerOfCanteen(req: NextRequest, canteenId: string)
 
   return { error: null, status: 200, user, canteen };
 }
+

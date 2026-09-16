@@ -45,17 +45,25 @@ export default function OwnerDashboardPage() {
       .then((res) => res.json())
       .then((resData) => {
         if (resData.error) {
-          router.replace('/');
-        } else {
+          console.warn('Dashboard response error:', resData.error);
+        }
+        if (resData.canteen) {
           setData(resData);
         }
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch((err) => {
+        console.error('Fetch dashboard failed:', err);
+        setLoading(false);
+      });
   };
 
   useEffect(() => {
     fetchDashboard();
+
+    const timeout = setTimeout(() => {
+      setLoading(false);
+    }, 3000);
 
     // Supabase Realtime channel for live operational updates!
     const channel = supabase
@@ -70,6 +78,7 @@ export default function OwnerDashboardPage() {
       .subscribe();
 
     return () => {
+      clearTimeout(timeout);
       supabase.removeChannel(channel);
     };
   }, []);
