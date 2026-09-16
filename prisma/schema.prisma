@@ -1,0 +1,170 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String    @id @default(uuid())
+  name      String
+  email     String    @unique
+  password  String
+  phone     String?
+  role      String    @default("STUDENT") // STUDENT, OWNER, ADMIN
+  status    String    @default("ACTIVE")  // ACTIVE, PENDING, SUSPENDED
+
+  canteens  Canteen[]
+  orders    Order[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Canteen {
+  id               String            @id @default(uuid())
+  name             String
+  location         String
+  status           String            @default("LIVE") // SETUP, READY, LIVE, PAUSED, CLOSED, DEACTIVATED
+  ownerId          String?
+  owner            User?             @relation(fields: [ownerId], references: [id])
+  
+  capacitySettings CapacitySettings?
+  menuItems        MenuItem[]
+  orders           Order[]
+  pickupBatches    PickupBatch[]
+
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+}
+
+model CapacitySettings {
+  id                      String   @id @default(uuid())
+  canteenId               String   @unique
+  canteen                 Canteen  @relation(fields: [canteenId], references: [id], onDelete: Cascade)
+  maxActiveOrders         Int      @default(100)
+  maxPickupOrdersPerBatch Int      @default(40)
+  prepCapacityPerBatch    Int      @default(50)
+  breakDurationMinutes    Int      @default(15)
+  isPaused                Boolean  @default(false)
+}
+
+model MenuItem {
+  id                String             @id @default(uuid())
+  canteenId         String
+  canteen           Canteen            @relation(fields: [canteenId], references: [id], onDelete: Cascade)
+  name              String
+  category          String
+  description       String?
+  price             Float
+  active            Boolean            @default(true)
+  stockMode         String             @default("COUNT") // COUNT, CAPACITY
+  currentStock      Int                @default(0)
+  dailyCapacity     Int                @default(100)
+
+  orderItems        OrderItem[]
+  stockTransactions StockTransaction[]
+
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+}
+
+model StockTransaction {
+  id              String   @id @default(uuid())
+  menuItemId      String
+  menuItem        MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  orderId         String?
+  changeAmount    Int
+  previousStock   Int
+  newStock        Int
+  transactionType String   // INITIAL, ORDER_DEDUCTION, MANUAL_ADJUSTMENT, RESTOCK, CANCEL_RESTOCK
+  note            String?
+  createdAt       DateTime @default(now())
+}
+
+model PickupBatch {
+  id                String   @id @default(uuid())
+  canteenId         String
+  canteen           Canteen  @relation(fields: [canteenId], references: [id], onDelete: Cascade)
+  startTime         DateTime
+  endTime           DateTime
+  maxCapacity       Int      @default(40)
+  currentOrderCount Int      @default(0)
+  orders            Order[]
+  createdAt         DateTime @default(now())
+}
+
+model Order {
+  id              String         @id @default(uuid())
+  publicOrderCode String
+  studentId       String
+  student         User           @relation(fields: [studentId], references: [id])
+  canteenId       String
+  canteen         Canteen        @relation(fields: [canteenId], references: [id])
+  batchId         String?
+  batch           PickupBatch?   @relation(fields: [batchId], references: [id])
+  subtotal        Float
+  paymentStatus   String         @default("PENDING")   // PENDING, PAID, FAILED, REFUNDED
+  orderStatus     String         @default("CONFIRMED") // CART, PAYMENT_PENDING, PAID, CONFIRMED, PREPARING, READY, COLLECTED, EXPIRED, CANCELLED
+  pickupWindow    String
+  
+  items           OrderItem[]
+  otpCredential   OtpCredential?
+  payment         Payment?
+
+  confirmedAt     DateTime       @default(now())
+  readyAt         DateTime?
+  collectedAt     DateTime?
+  expiresAt       DateTime?
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model OrderItem {
+  id         String   @id @default(uuid())
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+  itemName   String
+  unitPrice  Float
+  quantity   Int
+  subtotal   Float
+}
+
+model OtpCredential {
+  id        String    @id @default(uuid())
+  orderId   String    @unique
+  order     Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  otpCode   String
+  isUsed    Boolean   @default(false)
+  attempts  Int       @default(0)
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+}
+
+model Payment {
+  id                String   @id @default(uuid())
+  orderId           String   @unique
+  order             Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  razorpayOrderId   String
+  razorpayPaymentId String?
+  razorpaySignature String?
+  status            String
+  amount            Float
+  currency          String   @default("INR")
+  createdAt         DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  type      String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
