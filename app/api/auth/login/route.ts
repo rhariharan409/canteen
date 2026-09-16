@@ -3,6 +3,8 @@ import bcrypt from 'bcryptjs';
 import { db } from '@/lib/db';
 import { signToken } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json();
@@ -43,7 +45,6 @@ export async function POST(req: NextRequest) {
       role: user.role as any,
     });
 
-    // Determine target redirect route based on role
     let redirectUrl = '/student/home';
     if (user.role === 'OWNER') {
       redirectUrl = '/owner/dashboard';
@@ -68,7 +69,7 @@ export async function POST(req: NextRequest) {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: 7 * 24 * 60 * 60, // 7 days
+      maxAge: 7 * 24 * 60 * 60,
     });
 
     return response;

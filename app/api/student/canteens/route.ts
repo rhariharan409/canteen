@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
   if (auth.error) {
@@ -9,7 +11,6 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Only ACTIVE / APPROVED canteens should appear
     const canteens = await db.canteen.findMany({
       where: {
         status: { in: ['LIVE', 'PAUSED'] },
@@ -40,7 +41,7 @@ export async function GET(req: NextRequest) {
       if (loadPercentage > 75) pickupLoadLabel = 'High';
       else if (loadPercentage > 40) pickupLoadLabel = 'Medium';
 
-      let displayStatus = canteen.status; // LIVE or PAUSED
+      let displayStatus = canteen.status;
       if (canteen.capacitySettings?.isPaused) {
         displayStatus = 'PAUSED';
       }

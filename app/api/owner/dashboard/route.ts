@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req, ['OWNER', 'ADMIN']);
   if (auth.error || !auth.user) {
@@ -42,7 +44,6 @@ export async function GET(req: NextRequest) {
     const activeCount = preparingCount + readyCount;
     const capacityPercentage = Math.min(100, Math.round((activeCount / maxActive) * 100));
 
-    // Get current active pickup batch details
     const activeBatches = await db.pickupBatch.findMany({
       where: {
         canteenId: canteen.id,
@@ -57,7 +58,6 @@ export async function GET(req: NextRequest) {
 
     const currentBatch = activeBatches.find((b) => b.orders.some((o) => o.orderStatus !== 'COLLECTED')) || activeBatches[0];
 
-    // Compute preparation summary for current batch
     const prepSummary: Record<string, number> = {};
     let currentBatchReadyCount = 0;
     let currentBatchPrepCount = 0;
