@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
       email: user.email,
       phone: user.phone,
       role: user.role,
-      assignedCanteen: user.canteens[0] || null,
+      assignedCanteen: (user as any).canteens?.[0] || null,
     },
   });
 }
